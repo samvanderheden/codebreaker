@@ -30,7 +30,7 @@
         .font-orbitron { font-family: 'Orbitron', sans-serif; }
         .font-pixel { font-family: 'Press Start 2P', monospace; }
 
-        /* Pure Imperial Crisp White Panel Styling with stark black seams */
+        /* Crisp Imperial Panel Styling */
         .imperial-panel {
             background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
             border: 3px solid #090d16;
@@ -79,11 +79,32 @@
             user-select: text !important;
             cursor: text;
         }
+
+        /* Pulse glow animation */
+        @keyframes laserFlash {
+            0% { opacity: 0; }
+            50% { opacity: 0.8; background-color: rgba(239, 68, 68, 0.4); }
+            100% { opacity: 0; }
+        }
+        .laser-hit {
+            animation: laserFlash 0.3s ease-out;
+        }
+
+        /* Time Bonus Pop Animation */
+        @keyframes timeBonusPop {
+            0% { transform: scale(0.5); opacity: 0; }
+            15% { transform: scale(1.2); opacity: 1; }
+            85% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .animate-time-bonus {
+            animation: timeBonusPop 2s ease-out forwards;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-2 md:p-4 text-slate-100" id="gameContainer">
 
-    <!-- TOP STATUS BAR (Timer, Shields, Sector Info, Audio Toggle) -->
+    <!-- TOP STATUS BAR (Timer, Shields, Score, Sector Info, Audio Toggle) -->
     <header class="max-w-5xl mx-auto w-full mb-3 imperial-panel rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 border-2 border-black">
         <!-- Title & Sector -->
         <div class="flex items-center gap-3">
@@ -99,20 +120,26 @@
                     <h1 class="font-orbitron font-black text-lg md:text-xl tracking-wider text-slate-950 leading-none">C0DEBREAKER</h1>
                 </div>
                 <p id="sectorBadge" class="text-xs font-bold text-slate-800 mt-1 uppercase tracking-widest flex items-center gap-1">
-                    <span>🛸</span> Sector 1: Imperial Cargo
+                    <span>🛸</span> Sector 1: Imperial Cargo Bay
                 </p>
             </div>
         </div>
 
-        <!-- Timer, Shields, Audio Control -->
-        <div class="flex items-center gap-3 md:gap-4">
+        <!-- Timer, Shields, Score, Audio Control -->
+        <div class="flex items-center gap-3 md:gap-4 flex-wrap justify-end">
             <!-- Audio Toggle -->
             <button onclick="toggleAudioHum()" id="audioHumBtn" class="bg-black hover:bg-slate-900 text-amber-400 border border-amber-400 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-bold transition">
                 <span>🔊</span> <span id="humStatusText" class="hidden md:inline">Audio: AAN</span>
             </button>
 
+            <!-- Score -->
+            <div class="text-center">
+                <span class="text-[10px] uppercase font-bold text-slate-600 block leading-tight">Score</span>
+                <span id="scoreDisplay" class="font-orbitron font-bold text-base text-slate-900">0</span>
+            </div>
+
             <!-- Door Counter -->
-            <div class="text-center ml-2">
+            <div class="text-center ml-1">
                 <span class="text-[10px] uppercase font-bold text-slate-600 block leading-tight">Deur</span>
                 <span id="doorCounter" class="font-orbitron font-bold text-base text-slate-900">1 / 10</span>
             </div>
@@ -139,13 +166,25 @@
         <!-- LEFT COLUMN: Visual Ship Canvas & C-3PO Dialogue Box (7 Cols) -->
         <section class="lg:col-span-7 flex flex-col gap-3">
             <!-- Canvas Window (Crisp White Tantive IV / Star Destroyer Corridor) -->
-            <div class="relative w-full aspect-[16/9] bg-slate-950 rounded-xl overflow-hidden border-4 border-slate-900 shadow-2xl">
+            <div id="canvasWrapper" class="relative w-full aspect-[16/9] bg-slate-950 rounded-xl overflow-hidden border-4 border-slate-900 shadow-2xl">
                 <canvas id="shipCanvas" class="w-full h-full block"></canvas>
                 
+                <!-- Damage Flash Overlay -->
+                <div id="flashOverlay" class="absolute inset-0 pointer-events-none"></div>
+
                 <!-- Overlay Door Status Badge -->
                 <div class="absolute top-3 left-3 bg-slate-950/90 backdrop-blur px-3 py-1.5 rounded-md border border-slate-700 text-xs font-orbitron text-amber-400 flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse" id="statusDot"></span>
                     STATUS: <span id="doorStatusText" class="text-red-400 font-bold">VERGRENDELD</span>
+                </div>
+
+                <!-- Math Breakdown Quick Display Overlay -->
+                <div id="mathOverlay" class="hidden absolute bottom-3 left-3 right-3 bg-slate-950/95 border-2 border-amber-400 rounded-lg p-2.5 text-xs font-mono text-amber-300 shadow-xl backdrop-blur">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-amber-400 font-orbitron text-[11px]">FORMULE ANALYSE:</span>
+                        <button onclick="hideMathOverlay()" class="text-amber-400 hover:text-white font-bold">✕</button>
+                    </div>
+                    <div id="mathOverlayContent" class="text-slate-200"></div>
                 </div>
             </div>
 
@@ -178,9 +217,14 @@
                         <span class="font-orbitron font-bold text-amber-400 text-sm flex items-center gap-2">
                             <span>🔐</span> DEURSLOT TERMINAL
                         </span>
-                        <button onclick="toggleTutorialModal()" class="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded border border-amber-300 font-black transition">
-                            📖 Tutorial
-                        </button>
+                        <div class="flex gap-2">
+                            <button onclick="toggleHintModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-400 px-2 py-1 rounded border border-amber-400/40 font-bold transition">
+                                💡 Formulekaart
+                            </button>
+                            <button onclick="toggleTutorialModal()" class="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 px-2 py-1 rounded border border-amber-300 font-black transition">
+                                📖 Gids
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Problem Scenario Description -->
@@ -191,7 +235,7 @@
                     <!-- STEP 1: Select Formula Type (nPr, nCr, n^k) -->
                     <div class="mb-4">
                         <label class="block text-xs font-orbitron font-bold text-amber-400 mb-2">1. KIES HET TYPE FORMULE:</label>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                             <button onclick="selectType('permutatie')" id="type-permutatie" class="type-btn py-2 px-1 text-center rounded-lg text-xs font-bold">
                                 nPr<br><span class="text-[9px] opacity-75 font-normal">(Permutatie)</span>
                             </button>
@@ -201,6 +245,9 @@
                             <button onclick="selectType('herhaling')" id="type-herhaling" class="type-btn py-2 px-1 text-center rounded-lg text-xs font-bold">
                                 n^k<br><span class="text-[9px] opacity-75 font-normal">(Herhaling)</span>
                             </button>
+                            <button onclick="selectType('gecombineerd')" id="type-gecombineerd" class="type-btn py-2 px-1 text-center rounded-lg text-xs font-bold border-dashed border-amber-500 hover:border-amber-400">
+                                MIX<br><span class="text-[9px] opacity-75 font-normal">(× Vermenigvuldigen)</span>
+                            </button>
                         </div>
                     </div>
 
@@ -208,7 +255,7 @@
                     <div class="mb-4">
                         <label class="block text-xs font-orbitron font-bold text-amber-400 mb-1">2. VOER BEREKEND AANTAL IN:</label>
                         <div class="flex gap-2">
-                            <input type="number" id="codeInput" placeholder="Aantal opties..." class="bg-slate-950 border-2 border-slate-700 focus:border-amber-500 text-amber-300 font-orbitron text-lg px-3 py-2 rounded-lg w-full outline-none transition">
+                            <input type="number" id="codeInput" placeholder="Aantal opties..." onkeydown="if(event.key==='Enter') submitCode()" class="bg-slate-950 border-2 border-slate-700 focus:border-amber-500 text-amber-300 font-orbitron text-lg px-3 py-2 rounded-lg w-full outline-none transition">
                             <button onclick="submitCode()" class="bg-amber-500 hover:bg-amber-400 font-orbitron font-black text-slate-950 px-4 py-2 rounded-lg border-2 border-amber-300 shadow-lg transition active:scale-95">
                                 HACK
                             </button>
@@ -224,7 +271,7 @@
                     </div>
 
                     <!-- Real Editable Input display with Cursor Placement -->
-                    <input type="text" id="calcInputDisplay" value="0" placeholder="0" class="calc-input-field w-full bg-slate-900 border border-slate-700 text-emerald-400 font-orbitron text-base font-bold px-2 py-1 rounded outline-none focus:border-amber-500 mb-2">
+                    <input type="text" id="calcInputDisplay" value="0" placeholder="0" onkeydown="if(event.key==='Enter') calcEvaluate()" class="calc-input-field w-full bg-slate-900 border border-slate-700 text-emerald-400 font-orbitron text-base font-bold px-2 py-1 rounded outline-none focus:border-amber-500 mb-2">
 
                     <!-- Calculator Keypad with nPr & nCr buttons -->
                     <div class="grid grid-cols-4 gap-1 text-xs">
@@ -255,14 +302,49 @@
 
                         <button onclick="calcInsert('0')" class="bg-slate-800 hover:bg-slate-700 p-2 rounded font-bold col-span-2">0</button>
                         <button onclick="calcEvaluate()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 p-2 rounded font-bold">=</button>
-                        <button onclick="useCalcResult()" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded font-bold text-[10px]">↳ Kopiëren</button>
+                        <button onclick="useCalcResult()" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded font-bold text-[10px]">↳ Kopieer</button>
                     </div>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- INTERACTIVE TUTORIAL MODAL (Shows on start) -->
+    <!-- FORMULA QUICK REFERENCE MODAL -->
+    <div id="hintModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="imperial-panel max-w-lg w-full p-6 rounded-2xl relative shadow-2xl">
+            <button onclick="toggleHintModal()" class="absolute top-4 right-4 text-slate-900 font-black text-xl hover:text-red-600">✕</button>
+            <h2 class="font-orbitron font-black text-xl text-slate-900 mb-3 border-b-2 border-amber-400 pb-2 flex items-center gap-2">
+                <span>💡</span> FORMULES OVERZICHT
+            </h2>
+            <div class="space-y-3 text-xs text-slate-900">
+                <div class="p-3 bg-amber-100 rounded-lg border border-amber-300">
+                    <h4 class="font-bold font-orbitron text-amber-900">1. Permutatie (nPr)</h4>
+                    <p class="mt-1">Gebruik wanneer de <b>volgorde belangrijk</b> is en herhaling <b>niet</b> mag.</p>
+                    <p class="font-mono mt-1 text-slate-800 bg-white p-1.5 rounded border">Formule: nPr = n! / (n - k)!</p>
+                </div>
+                <div class="p-3 bg-blue-100 rounded-lg border border-blue-300">
+                    <h4 class="font-bold font-orbitron text-blue-900">2. Combinatie (nCr)</h4>
+                    <p class="mt-1">Gebruik wanneer de <b>volgorde NIET uitmaakt</b> en je een groep kiest.</p>
+                    <p class="font-mono mt-1 text-slate-800 bg-white p-1.5 rounded border">Formule: nCr = n! / (k! × (n - k)!)</p>
+                </div>
+                <div class="p-3 bg-emerald-100 rounded-lg border border-emerald-300">
+                    <h4 class="font-bold font-orbitron text-emerald-900">3. Herhaling (n^k)</h4>
+                    <p class="mt-1">Gebruik wanneer <b>herhaling WEL mag</b> (bijv. pincodes met herhalende cijfers).</p>
+                    <p class="font-mono mt-1 text-slate-800 bg-white p-1.5 rounded border">Formule: Aantal = n^k</p>
+                </div>
+                <div class="p-3 bg-purple-100 rounded-lg border border-purple-300">
+                    <h4 class="font-bold font-orbitron text-purple-900">4. MIX (Gecombineerd / Vermenigvuldigen)</h4>
+                    <p class="mt-1">Gebruik wanneer een probleem <b>meerdere stappen</b> heeft (EN). Bereken elke stap los en <b>vermenigvuldig</b> ze met elkaar!</p>
+                    <p class="font-mono mt-1 text-slate-800 bg-white p-1.5 rounded border">Voorbeeld: (5 nCr 2) × (4 nPr 3)</p>
+                </div>
+            </div>
+            <button onclick="toggleHintModal()" class="mt-4 w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-orbitron font-bold py-2 rounded-xl border border-slate-900">
+                SLUITEN
+            </button>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE TUTORIAL MODAL -->
     <div id="tutorialModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
         <div class="imperial-panel max-w-xl w-full p-6 rounded-2xl relative shadow-2xl">
             <button onclick="toggleTutorialModal()" class="absolute top-4 right-4 text-slate-900 font-black text-xl hover:text-red-600">✕</button>
@@ -317,6 +399,17 @@
                     </div>
                 </div>
 
+                <!-- Rule 4: MIX -->
+                <div class="bg-white/95 p-3 rounded-xl border-2 border-purple-500 shadow-sm border-dashed">
+                    <h3 class="font-bold text-purple-900 font-orbitron flex items-center justify-between text-xs md:text-sm">
+                        <span>4. MIX (GEMENGD)</span>
+                        <span class="bg-purple-200 text-purple-900 px-2 py-0.5 rounded text-[10px]">Vermenigvuldigingsregel</span>
+                    </h3>
+                    <p class="text-xs text-slate-700 mt-1">
+                        Latere deuren hebben meerdere stappen tegelijk! Bereken elke stap apart (bijv. één nPr en één nCr) en <b>vermenigvuldig (×)</b> de resultaten met elkaar. Kies de <b>MIX</b> knop!
+                    </p>
+                </div>
+
                 <!-- Calculator Tip -->
                 <div class="bg-amber-100 p-2.5 rounded-lg border border-amber-300 text-xs text-amber-900">
                     💡 <b>Rekenmachine Tip:</b> Je kunt direct in de rekenmachine klikken met je muis om de cursor tussen getallen te plaatsen en typen, of gebruik de knoppen <b>nPr</b> en <b>nCr</b>!
@@ -331,11 +424,21 @@
         </div>
     </div>
 
+    <!-- TIME BONUS POPUP OVERLAY -->
+    <div id="timeBonusPopup" class="hidden fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
+        <div id="timeBonusText" class="font-orbitron font-black text-5xl md:text-7xl text-emerald-400 text-center uppercase drop-shadow-[0_0_25px_rgba(52,211,153,1)]" style="text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;">
+            +1 MINUUT!
+        </div>
+    </div>
+
     <!-- GAME OVER / WIN MODAL -->
     <div id="endModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
         <div class="imperial-panel max-w-md w-full p-6 rounded-2xl text-center shadow-2xl">
             <h2 id="endTitle" class="font-orbitron font-black text-2xl text-slate-900 mb-2">MISSIE VOLTOOID!</h2>
-            <p id="endDescription" class="text-slate-800 text-sm mb-6">Je hebt de cockpit bereikt en de hyperdrive gehackt naar Tatooine!</p>
+            <p id="endDescription" class="text-slate-800 text-sm mb-4">Je hebt de cockpit bereikt en de hyperdrive gehackt naar Tatooine!</p>
+            <div id="endScoreBox" class="bg-slate-950 text-amber-400 p-3 rounded-xl border border-slate-800 mb-6 font-orbitron font-bold text-lg">
+                EINDSCORE: <span id="finalScoreVal">0</span> PUNTEN
+            </div>
             <button onclick="resetGame()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-orbitron font-black py-3 px-6 rounded-xl border-2 border-slate-900 shadow-lg">
                 SPEEL OPNIEUW
             </button>
@@ -348,6 +451,28 @@
         let humOsc = null;
         let humGain = null;
         let humEnabled = true;
+
+        // Global functions on window scope for calculator evaluation
+        window.factorial = function(n) {
+            n = Math.floor(Number(n));
+            if (isNaN(n) || n < 0) return 0;
+            if (n === 0 || n === 1) return 1;
+            let result = 1;
+            for (let i = 2; i <= n; i++) result *= i;
+            return result;
+        };
+
+        window.permutation = function(n, k) { 
+            return window.factorial(n) / window.factorial(n - k); 
+        };
+
+        window.combination = function(n, k) { 
+            return window.factorial(n) / (window.factorial(k) * window.factorial(n - k)); 
+        };
+
+        window.repetition = function(n, k) { 
+            return Math.pow(n, k); 
+        };
 
         // Ambient Ship Engine Hum
         function startShipHum() {
@@ -472,71 +597,137 @@
             });
         }
 
-        function factorial(n) {
-            n = Math.floor(Number(n));
-            if (isNaN(n) || n < 0) return 0;
-            if (n === 0 || n === 1) return 1;
-            let result = 1;
-            for (let i = 2; i <= n; i++) result *= i;
-            return result;
-        }
-
-        function permutation(n, k) { return factorial(n) / factorial(n - k); }
-        function combination(n, k) { return factorial(n) / (factorial(k) * factorial(n - k)); }
-        function repetition(n, k) { return Math.pow(n, k); }
-
-        function generateRandomQuestion(doorIndex) {
-            let minN, maxN, minK, maxK;
-            if (doorIndex < 3) { minN = 4; maxN = 6; minK = 2; maxK = 3; } 
-            else if (doorIndex < 7) { minN = 6; maxN = 8; minK = 3; maxK = 4; } 
-            else { minN = 7; maxN = 9; minK = 4; maxK = 5; }
-
-            const types = ['permutatie', 'combinatie', 'herhaling'];
-            const type = types[Math.floor(Math.random() * types.length)];
-            const n = Math.floor(Math.random() * (maxN - minN + 1)) + minN;
-            const k = Math.min(Math.floor(Math.random() * (maxK - minK + 1)) + minK, n);
-
+        // Helper functie voor de simpele sommen
+        function generateSingleQuestion(type, n, k) {
             let questionText = "";
             let targetAnswer = 0;
+            let breakdownText = "";
 
             if (type === 'permutatie') {
-                targetAnswer = permutation(n, k);
+                targetAnswer = window.permutation(n, k);
                 const scenarios = [
-                    `Een Keizerlijk deurslot vereist een volgorde van ${k} unieke sleutelkaarten gekozen uit ${n} verschillende opties. De VOLGORDE telt en herhaling mag niet. Welke formule moet je gebruiken? (n=${n}, k=${k})`,
-                    `Er moeten ${k} officieren gekozen worden uit ${n} kandidaten voor de specifieke posities van Commandant, Luitenant en Navigator. De specifieke FUNCTIE/VOLGORDE telt! (n=${n}, k=${k})`,
+                    `Een Keizerlijk deurslot vereist een volgorde van ${k} unieke sleutelkaarten gekozen uit ${n} verschillende opties. De VOLGORDE telt en herhaling mag niet. (n=${n}, k=${k})`,
+                    `Er moeten ${k} officieren gekozen worden uit ${n} kandidaten voor de specifieke posities van Commandant, Luitenant en Navigator. De FUNCTIE/VOLGORDE telt! (n=${n}, k=${k})`,
                     `Een datakabel heeft ${k} pinnen. Je kiest uit ${n} gekleurde draden. Welke draad op welke positie zit maakt uit en geen herhaling is toegestaan. (n=${n}, k=${k})`
                 ];
                 questionText = scenarios[Math.floor(Math.random() * scenarios.length)];
+                breakdownText = `Formule: nPr = ${n}! / (${n}-${k})! = ${targetAnswer}`;
             } else if (type === 'combinatie') {
-                targetAnswer = combination(n, k);
+                targetAnswer = window.combination(n, k);
                 const scenarios = [
                     `Om de energie-overbelasting op te heffen moeten er ${k} klemmen tegelijk gekoppeld worden uit een voorraad van ${n} klemmen. De VOLGORDE telt NIET. (n=${n}, k=${k})`,
                     `Selecteer een verkenningsgroep van ${k} Astromech Droids uit een hangar van ${n} droids. De volgorde waarin je ze kiest telt NIET. (n=${n}, k=${k})`,
                     `De deursleutel is een combinatie van ${k} frequenties gekozen uit ${n} opties. Welke frequenties je kiest telt, maar de VOLGORDE telt NIET. (n=${n}, k=${k})`
                 ];
                 questionText = scenarios[Math.floor(Math.random() * scenarios.length)];
+                breakdownText = `Formule: nCr = ${n}! / (${k}! × (${n}-${k})!) = ${targetAnswer}`;
             } else if (type === 'herhaling') {
-                targetAnswer = repetition(n, k);
+                targetAnswer = window.repetition(n, k);
                 const scenarios = [
                     `Het deurbedieningspaneel vraagt om een pincode van ${k} cijfers. Elk cijfer kan gekozen worden uit ${n} knoppen. Cijfers MOGEN HERHAALD worden! (n=${n}, k=${k})`,
                     `Een Keizerlijke beveiligingssleutel bestaat uit ${k} opeenvolgende tekens gekozen uit ${n} beschikbare karakters. HERHALING is toegestaan! (n=${n}, k=${k})`,
                     `Er zijn ${k} hendels. Elke hendel heeft ${n} mogelijke standen. Hoeveel verschillende standencombinaties zijn er mogelijk? (n=${n}, k=${k})`
                 ];
                 questionText = scenarios[Math.floor(Math.random() * scenarios.length)];
+                breakdownText = `Formule: n^k = ${n}^${k} = ${targetAnswer}`;
             }
 
-            return { type: type, n: n, k: k, text: questionText, answer: targetAnswer };
+            return { type: type, n: n, k: k, text: questionText, answer: targetAnswer, breakdown: breakdownText };
+        }
+
+        function generateRandomQuestion(doorIndex) {
+            // DEUR 10: De ultieme BOSS FIGHT (Alle 3 gecombineerd)
+            if (doorIndex === 9) {
+                const n1 = 10, k1 = 4; // nCr
+                const n2 = 8, k2 = 3; // nPr
+                const n3 = 5, k3 = 3; // n^k
+                const ans1 = window.combination(n1, k1);
+                const ans2 = window.permutation(n2, k2);
+                const ans3 = window.repetition(n3, k3);
+                const targetAnswer = ans1 * ans2 * ans3;
+                
+                const text = `⚠️ KRITIEKE HYPERDRIVE LOCKDOWN! Darth Vader is bijna bij de cockpit! Je moet 3 zwaar beveiligde subsystemen tegelijk kraken en hun uitkomsten vermenigvuldigen (×):\n\nFase 1 (Schilden): Kies een verdedigingsmatrix van ${k1} energie-knooppunten uit een netwerk van ${n1}. De volgorde van het koppelen maakt NIET uit.\n\nFase 2 (Wapens): Laad de verdedigingskanonnen door ${k2} unieke focus-kristallen in ${n2} specifieke kamers te plaatsen. De volgorde en positie is CRUCIAAL en mag niet dubbel.\n\nFase 3 (Navigatie): Kraak het stuurwielslot met een beveiligingscode van ${k3} karakters, waarbij je telkens kunt kiezen uit ${n3} buitenaardse symbolen. Symbolen MOGEN HERHAALD worden.\n\nHoeveel totale combinaties moet de computer doorrekenen om te kunnen ontsnappen?`;
+                
+                const breakdown = `Mix: (${n1}nCr${k1}) × (${n2}nPr${k2}) × (${n3}^${k3}) = ${ans1} × ${ans2} × ${ans3} = ${targetAnswer}`;
+                return { type: 'gecombineerd', text: text, answer: targetAnswer, breakdown: breakdown };
+            } 
+            // DEUR 7 t/m 9: Harde MIX (Twee verschillende formules gecombineerd)
+            else if (doorIndex >= 6) {
+                const isPermComb = Math.random() > 0.5;
+                if (isPermComb) {
+                    const n1 = 8, k1 = 3; // nCr
+                    const n2 = 7, k2 = 4; // nPr
+                    const ans1 = window.combination(n1, k1);
+                    const ans2 = window.permutation(n2, k2);
+                    const targetAnswer = ans1 * ans2;
+                    const text = `NIVEAU 3 BEVEILIGINGSSCHILD. Om dit Keizerlijke schild te breken moet je twee brandmuren omzeilen. Bereken beide stappen en vermenigvuldig (×) ze met elkaar!\n\nBrandmuur A: Selecteer een team van ${k1} infiltratie-droids uit een divisie van ${n1}. De volgorde waarin je ze kiest maakt NIET uit, ze zijn allemaal gelijk.\n\nBrandmuur B: Wijs ${k2} unieke toegangscodes toe aan ${n2} commandanten. Welke code naar wie gaat (de exacte volgorde) TELT ZEKER en codes kunnen niet hergebruikt worden.`;
+                    const breakdown = `Mix: (${n1}nCr${k1}) × (${n2}nPr${k2}) = ${ans1} × ${ans2} = ${targetAnswer}`;
+                    return { type: 'gecombineerd', text: text, answer: targetAnswer, breakdown: breakdown };
+                } else {
+                    const n1 = 5, k1 = 4; // n^k
+                    const n2 = 9, k2 = 3; // nCr
+                    const ans1 = window.repetition(n1, k1);
+                    const ans2 = window.combination(n2, k2);
+                    const targetAnswer = ans1 * ans2;
+                    const text = `KEIZERLIJK DATACENTRUM. Dit is een versleuteld dubbel-slot. Vermenigvuldig (×) de mogelijkheden:\n\nSysteem 1: Een biometrisch wachtwoord van ${k1} tekens gekozen uit ${n1} basis-DNA letters. Omdat het DNA is, MAG het herhaald worden.\n\nSysteem 2: Kies ${k2} back-up schijven uit een zwaar beveiligde kluis van ${n2} schijven. De volgorde waarin je de schijven verzamelt maakt absoluut NIET uit.`;
+                    const breakdown = `Mix: (${n1}^${k1}) × (${n2}nCr${k2}) = ${ans1} × ${ans2} = ${targetAnswer}`;
+                    return { type: 'gecombineerd', text: text, answer: targetAnswer, breakdown: breakdown };
+                }
+            }
+            // DEUR 4 t/m 6: Medium (Enkele moeilijkere sommen, óf een simpele MIX)
+            else if (doorIndex >= 3) {
+                const rand = Math.random();
+                if (rand < 0.4) {
+                    const n1 = 6, k1 = 2, n2 = 5, k2 = 3;
+                    const ans1 = window.combination(n1, k1);
+                    const ans2 = window.combination(n2, k2);
+                    const text = `SECTOR KOPPELING: Om deze sectiedeuren te openen moet je ${k1} TIE-fighter piloten kiezen uit een groep van ${n1} EN tegelijkertijd ${k2} schutters selecteren uit een pool van ${n2}. Bij beide groepen zijn ze gelijk in rang, dus de volgorde maakt NIET uit. Bereken beide groepen en vermenigvuldig (×) de uitkomsten met elkaar voor het totale aantal combinaties.`;
+                    return { type: 'gecombineerd', text: text, answer: ans1 * ans2, breakdown: `Mix: (${n1}nCr${k1}) × (${n2}nCr${k2}) = ${ans1} × ${ans2} = ${ans1 * ans2}` };
+                } else {
+                    let minN = 10, maxN = 15, minK = 3, maxK = 4;
+                    const types = ['permutatie', 'combinatie', 'herhaling'];
+                    const type = types[Math.floor(Math.random() * types.length)];
+                    const n = Math.floor(Math.random() * (maxN - minN + 1)) + minN;
+                    const k = Math.min(Math.floor(Math.random() * (maxK - minK + 1)) + minK, n);
+                    
+                    let qText = ""; let breakdownText = ""; let targetAnswer = 0;
+                    if (type === 'permutatie') {
+                        targetAnswer = window.permutation(n, k);
+                        qText = `Gevorderde beveiliging! Het deurslot vereist een exacte, geordende reeks van ${k} unieke datakaarten. Je moet deze kiezen uit een enorme voorraad van ${n} kaarten. De VOLGORDE is cruciaal en je kunt elke kaart maar één keer gebruiken. Hoeveel mogelijke reeksen zijn er? (n=${n}, k=${k})`;
+                        breakdownText = `Formule: nPr = ${n}! / (${n}-${k})! = ${targetAnswer}`;
+                    } else if (type === 'combinatie') {
+                        targetAnswer = window.combination(n, k);
+                        qText = `Gevorderde beveiliging! Om een noodprotocol te activeren moeten er exact ${k} zekeringen gelijktijdig doorgebrand worden. Je hebt de keuze uit ${n} verschillende zekeringen. Omdat ze gelijktijdig geactiveerd worden, maakt de VOLGORDE NIET uit. (n=${n}, k=${k})`;
+                        breakdownText = `Formule: nCr = ${n}! / (${k}! × (${n}-${k})!) = ${targetAnswer}`;
+                    } else {
+                        targetAnswer = window.repetition(n, k);
+                        qText = `Gevorderde beveiliging! De terminal vraagt om een langere override-code van ${k} cijfers. Op het paneel bevinden zich ${n} verschillende symbolen. Aangezien het een digitaal paneel is, mogen de symbolen HERHAALD worden ingedrukt. Wat is het totaal aantal mogelijke codes? (n=${n}, k=${k})`;
+                        breakdownText = `Formule: n^k = ${n}^${k} = ${targetAnswer}`;
+                    }
+                    return { type: type, text: qText, answer: targetAnswer, breakdown: breakdownText };
+                }
+            }
+            // DEUR 1 t/m 3: Makkelijk (Enkele basis sommen)
+            else {
+                let minN = 5, maxN = 8, minK = 2, maxK = 3;
+                const types = ['permutatie', 'combinatie', 'herhaling'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const n = Math.floor(Math.random() * (maxN - minN + 1)) + minN;
+                const k = Math.min(Math.floor(Math.random() * (maxK - minK + 1)) + minK, n);
+                return generateSingleQuestion(type, n, k);
+            }
         }
 
         let currentDoor = 1;
         const totalDoors = 10;
         let shields = 3;
-        let timerSeconds = 420; // 7 minutes
+        let timerSeconds = 300; // Aangepast naar 5 minuten starttijd (300 sec)
         let timerInterval = null;
         let selectedType = null;
         let currentQuestion = null;
         let doorOpenProgress = 0;
         let isDoorOpening = false;
+        let score = 0;
 
         const canvas = document.getElementById('shipCanvas');
         const ctx = canvas.getContext('2d');
@@ -550,6 +741,7 @@
 
         let gonkX = 0;
         let mouseDroidX = 0;
+        let r2DomeAngle = 0;
 
         function drawShipScene() {
             const w = canvas.width;
@@ -558,14 +750,13 @@
             gonkX = (gonkX + 0.4) % (w * 0.35);
             mouseDroidX = (mouseDroidX + 2.2) % (w + 120);
 
-            if (currentDoor === 10) {
-                // Cockpit View
+            if (currentDoor === 10 && isDoorOpening) {
                 ctx.fillStyle = '#020617';
                 ctx.fillRect(0, 0, w, h);
                 ctx.lineWidth = 2;
-                for (let i = 0; i < 60; i++) {
-                    const angle = (i / 60) * Math.PI * 2;
-                    const len = (Math.sin(i * 12 + Date.now() * 0.003) * 0.5 + 0.5) * (w * 0.4);
+                for (let i = 0; i < 80; i++) {
+                    const angle = (i / 80) * Math.PI * 2;
+                    const len = (Math.sin(i * 12 + Date.now() * 0.005) * 0.5 + 0.5) * (w * 0.6);
                     const cx = w * 0.5;
                     const cy = h * 0.45;
                     ctx.strokeStyle = (i % 2 === 0) ? '#38bdf8' : '#ffffff';
@@ -580,7 +771,6 @@
                 ctx.arc(w * 0.5, h * 0.45, h * 0.38, 0, Math.PI * 2, true);
                 ctx.fill();
             } else {
-                // Background Space and Stars
                 ctx.fillStyle = '#020617';
                 ctx.fillRect(0, 0, w, h);
 
@@ -591,7 +781,6 @@
                     ctx.fillRect(sx, sy, (s % 2) + 1, (s % 2) + 1);
                 }
 
-                // Distant Star Destroyer
                 ctx.fillStyle = '#0f172a';
                 ctx.beginPath();
                 ctx.moveTo(w * 0.75, h * 0.15);
@@ -600,7 +789,6 @@
                 ctx.closePath();
                 ctx.fill();
 
-                // Corridor structure
                 ctx.fillStyle = '#f8fafc'; 
                 ctx.fillRect(0, h * 0.1, w, h * 0.62);
 
@@ -613,7 +801,6 @@
                 ctx.fillRect(0, h * 0.72, w, 4);
                 ctx.shadowBlur = 0;
 
-                // Imperial Vertical Light Columns
                 ctx.fillStyle = '#ffffff';
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = '#ffffff';
@@ -627,7 +814,6 @@
                 ctx.lineWidth = 4;
                 ctx.strokeRect(w * 0.02, h * 0.05, w * 0.96, h * 0.9);
 
-                // Blast Doors
                 const doorWidth = w * 0.22;
                 const doorLeftX = w * 0.28 - (doorOpenProgress * doorWidth);
                 const doorRightX = w * 0.50 + (doorOpenProgress * doorWidth);
@@ -846,6 +1032,8 @@
         function loadDoorQuestion() {
             doorOpenProgress = 0;
             selectedType = null;
+            hideMathOverlay();
+            calcClear();
             document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('selected'));
             document.getElementById('codeInput').value = "";
             document.getElementById('doorStatusText').textContent = "VERGRENDELD";
@@ -858,9 +1046,15 @@
             document.getElementById('problemText').textContent = currentQuestion.text;
 
             if (currentDoor === 1) {
-                setDialogue("Aanbiddelijke goedheid, R2! We zijn opgesloten! Kies de juiste formule (nPr, nCr of n^k) en voer de uitkomst in!");
+                setDialogue("Aanbiddelijke goedheid, R2! We zijn opgesloten! Kies de juiste formule en voer de uitkomst in!");
             } else if (currentDoor === 10) {
-                setDialogue("We zijn in de Cockpit! Gebruik je formulekennis om het schip in hyperspeed te zetten!");
+                setDialogue("We zijn in de Cockpit! De ultieme test... Je moet nu álle berekeningen tegelijk maken en vermenigvuldigen! Gebruik de MIX knop!");
+            } else if (currentDoor >= 6) {
+                const c3poHardComments = [
+                    "Pas op R2, deze deur vereist meerdere stappen! Reken ze los uit en vermenigvuldig de uitkomsten. Vergeet de MIX knop niet!",
+                    "Dit is complexe encryptie! Gebruik de vermenigvuldigingsregel en sla je tussenstappen op in de rekenmachine!"
+                ];
+                setDialogue(c3poHardComments[Math.floor(Math.random() * c3poHardComments.length)]);
             } else {
                 const c3poComments = [
                     "Pas op R2, de beveiligingsprotocollen van het Keizerrijk worden steeds ingewikkelder!",
@@ -872,12 +1066,31 @@
             }
         }
 
+        function showMathOverlay(text) {
+            const overlay = document.getElementById('mathOverlay');
+            document.getElementById('mathOverlayContent').textContent = text;
+            overlay.classList.remove('hidden');
+        }
+
+        function hideMathOverlay() {
+            document.getElementById('mathOverlay').classList.add('hidden');
+        }
+
+        function triggerLaserHit() {
+            const wrapper = document.getElementById('canvasWrapper');
+            const overlay = document.getElementById('flashOverlay');
+            overlay.className = "absolute inset-0 pointer-events-none laser-hit";
+            setTimeout(() => {
+                overlay.className = "absolute inset-0 pointer-events-none";
+            }, 300);
+        }
+
         function submitCode() {
             startShipHum();
             const userCode = parseInt(document.getElementById('codeInput').value);
 
             if (!selectedType) {
-                setDialogue("R2! Je bent vergeten te selecteren welk type formule dit is! (nPr, nCr of n^k)");
+                setDialogue("R2! Je bent vergeten te selecteren welk type formule dit is! (Kies uit de 4 knoppen)");
                 return;
             }
 
@@ -887,44 +1100,76 @@
             }
 
             if (selectedType === currentQuestion.type && userCode === currentQuestion.answer) {
+                // Correct!
+                score += 150 * currentDoor;
+                document.getElementById('scoreDisplay').textContent = score;
+                
+                // Bepaal de bonustijd op basis van de geopende deur:
+                // Deur 1-3: 0 min | Deur 4-7: +1 min | Deur 8-9: +2 min
+                let bonusSeconds = 0;
+                let bonusText = "";
+                
+                if (currentDoor >= 4 && currentDoor <= 7) {
+                    bonusSeconds = 60; // +1 Minuut
+                    bonusText = " (+1 Minuut extra tijd toegevoegd!)";
+                } else if (currentDoor >= 8 && currentDoor <= 9) {
+                    bonusSeconds = 120; // +2 Minuten
+                    bonusText = " (+2 Minuten extra tijd toegevoegd!)";
+                }
+
+                if (bonusSeconds > 0) {
+                    timerSeconds += bonusSeconds;
+                    updateTimerDisplay(); // Ververs direct op het scherm
+                    
+                    // Laat de grote bonus tekst in het midden zien
+                    const bonusPopup = document.getElementById('timeBonusPopup');
+                    const bonusTextEl = document.getElementById('timeBonusText');
+                    bonusTextEl.textContent = bonusSeconds === 60 ? "+1 MINUUT!" : "+2 MINUTEN!";
+                    
+                    bonusPopup.classList.remove('hidden');
+                    // Reset animatie voor het geval deze meerdere keren afspeelt
+                    bonusTextEl.classList.remove('animate-time-bonus');
+                    void bonusTextEl.offsetWidth; // forceer reflow
+                    bonusTextEl.classList.add('animate-time-bonus');
+                    
+                    setTimeout(() => {
+                        bonusPopup.classList.add('hidden');
+                        bonusTextEl.classList.remove('animate-time-bonus');
+                    }, 2000);
+                }
+                
                 playDoorSound();
                 isDoorOpening = true;
-                document.getElementById('doorStatusText').textContent = "TOEGANG VERLEEND";
-                document.getElementById('doorStatusText').className = "text-emerald-400 font-bold";
-                document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-emerald-400";
-
-                if (currentDoor < totalDoors) {
-                    setDialogue("Uitstekend werk R2! De hydraulische blastdeur schuift open! Op naar de volgende!");
-                    setTimeout(() => {
-                        currentDoor++;
-                        if (currentDoor >= 4 && currentDoor <= 6) {
-                            document.getElementById('sectorBadge').textContent = "Sector 2: Imperial Engineering";
-                        } else if (currentDoor >= 7) {
-                            document.getElementById('sectorBadge').textContent = "Sector 3: Command Deck & Cockpit";
-                        }
+                document.getElementById('doorStatusText').textContent = "OPEN";
+                document.getElementById('doorStatusText').className = "text-green-400 font-bold";
+                document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-green-500";
+                
+                setDialogue(`Goed gedaan R2! Dat is juist. De deuren gaan open!${bonusText}`);
+                showMathOverlay(currentQuestion.breakdown);
+                
+                setTimeout(() => {
+                    currentDoor++;
+                    if (currentDoor > totalDoors) {
+                        endGame(true);
+                    } else {
                         loadDoorQuestion();
-                    }, 1800);
-                } else {
-                    playVictoryFanfare();
-                    clearInterval(timerInterval);
-                    setTimeout(() => {
-                        document.getElementById('endTitle').textContent = "HYPERSPEED NAAR TATOOINE!";
-                        document.getElementById('endDescription').textContent = "Geweldig R2! Alle 10 de deuren gekraakt, de cockpit gehackt en we vliegen in hyperspeed naar Tatooine!";
-                        document.getElementById('endModal').classList.remove('hidden');
-                    }, 1500);
-                }
+                    }
+                }, 3500);
+                
             } else {
+                // Fout!
+                playBlasterSound();
+                triggerLaserHit();
                 shields--;
                 updateShieldsDisplay();
-                playBlasterSound();
-
+                calcClear();
+                document.getElementById('codeInput').value = "";
+                
                 if (shields <= 0) {
-                    clearInterval(timerInterval);
-                    document.getElementById('endTitle').textContent = "GEVANGEN GENOMEN!";
-                    document.getElementById('endDescription').textContent = "De schilden zijn uitgeput en de Stormtroopers hebben R2-D2 en C-3PO overmeesterd.";
-                    document.getElementById('endModal').classList.remove('hidden');
+                    endGame(false);
                 } else {
-                    setDialogue("Ojee R2! Dat antwoord klopt niet! Controleer of je nPr of nCr moet hebben en herbereken!");
+                    setDialogue(`Nee, dat is fout! We zijn geraakt door een blaster! De juiste methode was ${currentQuestion.type}. Probeer de berekening opnieuw!`);
+                    showMathOverlay(`Fout antwoord. Bekijk je stappen goed. Controleer met de rekenmachine.`);
                 }
             }
         }
@@ -932,114 +1177,153 @@
         function updateShieldsDisplay() {
             const container = document.getElementById('shieldsContainer');
             container.innerHTML = "";
-            for (let i = 0; i < 3; i++) {
-                if (i < shields) { container.innerHTML += "<span>🛡️</span>"; } 
-                else { container.innerHTML += "<span class='opacity-20'>🛡️</span>"; }
+            for (let i = 0; i < shields; i++) {
+                container.innerHTML += "<span>🛡️</span>";
             }
         }
 
-        // Interactive Calculator Logic with Mouse Cursor Placement Support
-        function calcInsert(text) {
-            const input = document.getElementById('calcInputDisplay');
-            if (input.value === "0" && !text.startsWith(" ") && text !== ".") {
-                input.value = "";
-            }
-
-            const start = input.selectionStart !== null ? input.selectionStart : input.value.length;
-            const end = input.selectionEnd !== null ? input.selectionEnd : input.value.length;
-            const val = input.value;
-
-            input.value = val.substring(0, start) + text + val.substring(end);
-            const newPos = start + text.length;
-            
-            input.focus();
-            input.setSelectionRange(newPos, newPos);
-            document.getElementById('calcMsg').textContent = "";
+        function updateTimerDisplay() {
+            const min = Math.floor(timerSeconds / 60);
+            const sec = timerSeconds % 60;
+            document.getElementById('timerDisplay').textContent = 
+                `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
         }
 
-        function calcClear() {
-            const input = document.getElementById('calcInputDisplay');
-            input.value = "0";
-            document.getElementById('calcMsg').textContent = "";
-            input.focus();
-        }
-
-        function calcEvaluate() {
-            const input = document.getElementById('calcInputDisplay');
-            let expr = input.value.trim();
-            if (!expr) return;
-
-            try {
-                // Parse nPr: "7 nPr 3" -> permutation(7, 3)
-                expr = expr.replace(/(\d+(\.\d+)?)\s*nPr\s*(\d+(\.\d+)?)/gi, 'permutation($1, $3)');
-                // Parse nCr: "7 nCr 3" -> combination(7, 3)
-                expr = expr.replace(/(\d+(\.\d+)?)\s*nCr\s*(\d+(\.\d+)?)/gi, 'combination($1, $3)');
-                // Parse Factorial: "5!" -> factorial(5)
-                expr = expr.replace(/(\d+)!/g, 'factorial($1)');
-                // Parse Power: "7^3" -> Math.pow(7, 3)
-                expr = expr.replace(/(\d+(\.\d+)?)\s*\^\s*(\d+(\.\d+)?)/g, 'Math.pow($1, $3)');
-
-                // Safe evaluation using strict Function scope
-                const res = Function('"use strict"; return (' + expr + ')')();
-
-                if (res === undefined || isNaN(res) || !isFinite(res)) {
-                    document.getElementById('calcMsg').textContent = "Ongeldige berekening";
-                    return;
-                }
-
-                input.value = res.toString();
-                document.getElementById('calcMsg').textContent = "";
-            } catch (e) {
-                // Friendly error message without JS exceptions breaking UI
-                document.getElementById('calcMsg').textContent = "Incomplete berekening";
-            }
-        }
-
-        function useCalcResult() {
-            const inputVal = document.getElementById('calcInputDisplay').value.trim();
-            const num = parseFloat(inputVal);
-            if (!isNaN(num)) {
-                document.getElementById('codeInput').value = num;
-            }
-        }
-
-        function startTimer() {
+        function startGameTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            document.getElementById('timerDisplay').textContent = "05:00";
             timerInterval = setInterval(() => {
-                timerSeconds--;
-                const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-                const secs = (timerSeconds % 60).toString().padStart(2, '0');
-                document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
-
                 if (timerSeconds <= 0) {
                     clearInterval(timerInterval);
-                    document.getElementById('endTitle').textContent = "TIJD IS OM!";
-                    document.getElementById('endDescription').textContent = "De 7 minuten zijn verstreken! Het ruimteschip is in algehele lockdown gegaan.";
-                    document.getElementById('endModal').classList.remove('hidden');
+                    endGame(false);
+                } else {
+                    timerSeconds--;
+                    updateTimerDisplay();
                 }
             }, 1000);
         }
 
-        function toggleTutorialModal() {
-            document.getElementById('tutorialModal').classList.toggle('hidden');
+        function endGame(isWin) {
+            clearInterval(timerInterval);
+            const modal = document.getElementById('endModal');
+            const title = document.getElementById('endTitle');
+            const desc = document.getElementById('endDescription');
+            document.getElementById('finalScoreVal').textContent = score;
+
+            modal.classList.remove('hidden');
+            if (isWin) {
+                playVictoryFanfare();
+                title.textContent = "MISSIE VOLTOOID!";
+                title.className = "font-orbitron font-black text-2xl text-green-500 mb-2";
+                desc.textContent = "Geweldig R2! We hebben de cockpit bereikt en de hyperdrive geactiveerd. We zijn veilig!";
+            } else {
+                playBlasterSound();
+                title.textContent = "MISSIE MISLUKT";
+                title.className = "font-orbitron font-black text-2xl text-red-600 mb-2";
+                desc.textContent = "Oh nee! De stormtroopers hebben ons te pakken of de tijd is op... Onze missie eindigt hier.";
+            }
         }
 
         function resetGame() {
+            document.getElementById('endModal').classList.add('hidden');
             currentDoor = 1;
             shields = 3;
-            timerSeconds = 420;
+            timerSeconds = 300; // Reset naar 5 minuten
+            score = 0;
+            document.getElementById('scoreDisplay').textContent = "0";
             updateShieldsDisplay();
-            document.getElementById('endModal').classList.add('hidden');
-            document.getElementById('sectorBadge').textContent = "Sector 1: Imperial Cargo";
-            clearInterval(timerInterval);
-            startTimer();
+            startGameTimer();
             loadDoorQuestion();
+            isDoorOpening = false;
+            doorOpenProgress = 0;
         }
 
-        window.onload = function() {
-            drawShipScene();
-            startTimer();
-            loadDoorQuestion();
-        };
+        function toggleHintModal() { document.getElementById('hintModal').classList.toggle('hidden'); }
+        function toggleTutorialModal() { document.getElementById('tutorialModal').classList.toggle('hidden'); }
+
+        function calcInsert(val) {
+            const display = document.getElementById('calcInputDisplay');
+            // Support voor invoegen op de cursor positie
+            const startPos = display.selectionStart;
+            const endPos = display.selectionEnd;
+            const text = display.value;
+            
+            if (text === '0' && val.trim() !== 'nPr' && val.trim() !== 'nCr' && val !== '+' && val !== '-' && val !== '*' && val !== '/') {
+                display.value = val;
+            } else {
+                display.value = text.substring(0, startPos) + val + text.substring(endPos);
+                display.selectionStart = display.selectionEnd = startPos + val.length;
+            }
+            display.focus();
+        }
+
+        function calcClear() {
+            document.getElementById('calcInputDisplay').value = '0';
+            document.getElementById('calcMsg').textContent = '';
+        }
+
+        function calcEvaluate() {
+            const display = document.getElementById('calcInputDisplay');
+            let expr = display.value;
+            let result = 0;
+
+            try {
+                // Converteer tekstuele operators naar Javascript Functies
+                expr = expr.replace(/(\d+)\s*nPr\s*(\d+)/g, "window.permutation($1, $2)");
+                expr = expr.replace(/(\d+)\s*nCr\s*(\d+)/g, "window.combination($1, $2)");
+                expr = expr.replace(/(\d+)\s*\^\s*(\d+)/g, "window.repetition($1, $2)");
+                expr = expr.replace(/(\d+)!/g, "window.factorial($1)");
+                
+                // Veiligere tekens voor vermenigvuldigen
+                expr = expr.replace(/×/g, '*').replace(/÷/g, '/');
+
+                // Beoordeel de string vergelijking (gebruik Function in plaats van direct eval)
+                result = new Function('return ' + expr)();
+                
+                if (isNaN(result) || !isFinite(result)) throw "Foutieve berekening";
+                
+                display.value = Math.round(result);
+                document.getElementById('calcMsg').textContent = "BEREKEND";
+                document.getElementById('calcMsg').className = "text-[10px] font-orbitron text-green-400 font-bold";
+            } catch (e) {
+                document.getElementById('calcMsg').textContent = "ERROR";
+                document.getElementById('calcMsg').className = "text-[10px] font-orbitron text-red-500 font-bold";
+            }
+            // Wis melding
+            setTimeout(() => document.getElementById('calcMsg').textContent = "", 2000);
+        }
+
+        function useCalcResult() {
+            const display = document.getElementById('calcInputDisplay');
+            const codeInput = document.getElementById('codeInput');
+            codeInput.value = display.value;
+            
+            // Visuele feedback op de kopieer knop
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "✓ Gekopieerd";
+            btn.classList.add('bg-green-500');
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.remove('bg-green-500');
+            }, 1500);
+        }
+
+        window.onload = function () {
+            // Forceer weergave van tutorial bij start
+            document.getElementById('tutorialModal').classList.remove('hidden');
+            document.getElementById('timerDisplay').textContent = "05:00";
+            
+            // Haak in op de sluit knop van de tutorial om de timer pas DAN te starten
+            const originalToggle = toggleTutorialModal;
+            window.toggleTutorialModal = function() {
+                originalToggle();
+                if(!timerInterval) { // Start game enkel als de klok nog niet tikt
+                    resetGame();
+                    drawShipScene();
+                }
+            }
+        }
     </script>
 </body>
 </html>
